@@ -61,14 +61,11 @@ jobs:
       - name: Use PyInstaller to build Windows binary
         run: pyinstaller run.spec
 
-      - name: Package Windows binary zip
-        run: powershell Compress-Archive -Path dist/run.exe -DestinationPath run-windows.zip
-
       - name: Upload Windows zip
         uses: actions/upload-artifact@v4
         with:
           name: run-windows
-          path: run-windows.zip
+          path: dist/run.exe
 
   release:
     needs: [build-windows]
