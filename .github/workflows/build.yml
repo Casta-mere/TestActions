@@ -32,47 +32,6 @@ jobs:
           name: frontend-static
           path: Frontend/static/
 
-  build-linux:
-    runs-on: ubuntu-latest
-    needs: build-frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download static files
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-static
-          path: Frontend/static
-
-      - name: Configure pip to use Tsinghua mirror
-        run: |
-          mkdir -p ~/.pip
-          echo "[global]" > ~/.pip/pip.conf
-          echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> ~/.pip/pip.conf
-          echo "trusted-host = pypi.tuna.tsinghua.edu.cn" >> ~/.pip/pip.conf
-
-      - name: Install Python dependencies and PyInstaller
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install --upgrade pip setuptools
-          pip install --upgrade pyinstaller
-
-      - name: Build backend docker image
-        run: docker build -t cpp-ticket-backend:${{ github.ref_name }} .
-
-      - name: Run backend docker container
-        run: docker run --rm -v ${{ github.workspace }}:/cpp-ticket cpp-ticket-backend:${{ github.ref_name }}
-
-      - name: Package Linux binary zip
-        run: zip -j run-linux.zip dist/run
-
-      - name: Upload Linux zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: run-linux
-          path: run-linux.zip
-
   build-windows:
     runs-on: windows-latest
     needs: build-frontend
@@ -95,15 +54,12 @@ jobs:
       - name: Install Python dependencies and PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r /Backend/requirements.txt
           pip install --upgrade pip setuptools
           pip install --upgrade pyinstaller
 
-      - name: Build backend docker image
-        run: docker build -t cpp-ticket-backend:${{ github.ref_name }} .
-
-      - name: Run backend docker container
-        run: docker run --rm -v ${{ github.workspace }}:/cpp-ticket cpp-ticket-backend:${{ github.ref_name }}
+      - name: Use PyInstaller to build Windows binary
+        run: pyinstaller run.spec
 
       - name: Package Windows binary zip
         run: powershell Compress-Archive -Path dist/run.exe -DestinationPath run-windows.zip
@@ -114,69 +70,16 @@ jobs:
           name: run-windows
           path: run-windows.zip
 
-  build-macos:
-    runs-on: macos-latest
-    needs: build-frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download static files
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-static
-          path: Frontend/static
-
-      - name: Configure pip to use Tsinghua mirror
-        run: |
-          mkdir -p ~/.pip
-          echo "[global]" > ~/.pip/pip.conf
-          echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> ~/.pip/pip.conf
-          echo "trusted-host = pypi.tuna.tsinghua.edu.cn" >> ~/.pip/pip.conf
-
-      - name: Install Python dependencies and PyInstaller
-        run: |
-          python3 -m pip install --upgrade pip
-          pip3 install -r requirements.txt
-          pip3 install --upgrade pip setuptools
-          pip3 install --upgrade pyinstaller
-
-      - name: Build backend docker image
-        run: docker build -t cpp-ticket-backend:${{ github.ref_name }} .
-
-      - name: Run backend docker container
-        run: docker run --rm -v ${{ github.workspace }}:/cpp-ticket cpp-ticket-backend:${{ github.ref_name }}
-
-      - name: Package macOS binary zip
-        run: zip -j run-macos.zip dist/run
-
-      - name: Upload macOS zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: run-macos
-          path: run-macos.zip
-
   release:
-    needs: [build-linux, build-windows, build-macos]
+    needs: [build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download Linux zip
-        uses: actions/download-artifact@v4
-        with:
-          name: run-linux
-          path: artifacts/
 
       - name: Download Windows zip
         uses: actions/download-artifact@v4
         with:
           name: run-windows
-          path: artifacts/
-
-      - name: Download macOS zip
-        uses: actions/download-artifact@v4
-        with:
-          name: run-macos
           path: artifacts/
 
       - name: Create GitHub Release with zip files
@@ -185,8 +88,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           files: |
-            artifacts/run-linux/run-linux.zip
             artifacts/run-windows/run-windows.zip
-            artifacts/run-macos/run-macos.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
