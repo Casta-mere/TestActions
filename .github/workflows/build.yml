@@ -12,19 +12,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build frontend in Docker
-        run: |
-          docker build -t cpp-ticket-frontend -f Frontend/Dockerfile Frontend
-          docker create --name extract cpp-ticket-frontend
-          docker cp extract:/cpp-ticket/out_exported ./Frontend/static
-          docker rm extract
+      - name: Create docker volume
+        run: docker volume create cpp_node_modules
 
+      - name: Build frontend image
+        run: docker build -t cpp-ticket-frontend:${{ github.ref_name }} -f Frontend/Dockerfile Frontend
+
+      - name: Run frontend container to build static files
+        run: |
+          docker run --rm \
+            -v cpp_node_modules:/cpp-ticket/node_modules \
+            -v ${{ github.workspace }}/Frontend/cpp-ticket:/cpp-ticket \
+            -v ${{ github.workspace }}/Frontend/static:/cpp-ticket/out_exported \
+            cpp-ticket-frontend:${{ github.ref_name }}
+      
       - name: Upload static files
         uses: actions/upload-artifact@v4
         with:
           name: frontend-static
           path: Frontend/static/
-
+          
   build-linux:
     runs-on: ubuntu-latest
     needs: build-frontend
