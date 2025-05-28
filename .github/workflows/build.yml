@@ -77,7 +77,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: run-windows
-          path: artifacts/
+          path: artifacts/run-windows
 
       - name: Create GitHub Release with zip files
         uses: softprops/action-gh-release@v2
@@ -87,4 +87,4 @@ jobs:
           files: |
             artifacts/run-windows/run.exe
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_CPP_Ticket }}
