@@ -61,11 +61,14 @@ jobs:
       - name: Use PyInstaller to build Windows binary
         run: pyinstaller run.spec
 
-      - name: Upload Windows zip
+      - name: Compress CPP-Ticket.exe into zip
+        run: powershell Compress-Archive -Path dist/CPP-Ticket.exe -DestinationPath CPP-Ticket_windows_${{ github.ref_name }}.zip
+
+      - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: run-windows
-          path: dist/run.exe
+          name: cpp-ticket-zip
+          path: CPP-Ticket_windows_${{ github.ref_name }}.zip
 
   release:
     needs: [build-windows]
@@ -76,8 +79,8 @@ jobs:
       - name: Download Windows zip
         uses: actions/download-artifact@v4
         with:
-          name: run-windows
-          path: artifacts/run-windows
+          name: cpp-ticket-zip
+          path: artifacts/
 
       - name: Create GitHub Release with zip files
         uses: softprops/action-gh-release@v2
@@ -85,6 +88,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           files: |
-            artifacts/run-windows/run.exe
+            artifacts/CPP-Ticket_windows_${{ github.ref_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GH_CPP_Ticket }}
