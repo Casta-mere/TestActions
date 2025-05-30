@@ -1,21 +1,15 @@
 # Author: Casta-mere
 import os
 import sys
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from .functions.login import LoginManager
 from pydantic import BaseModel
 import uvicorn
 import logging
-import queue
 
-logger = logging.getLogger("uvicorn") 
-log_file_path = "server.log"
-formatter = logging.Formatter(
-    '[%(asctime)s] [%(levelname)s] [%(module)s.%(funcName)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+logger = logging.getLogger("uvicorn")
 
 origins = [
     "http://localhost:8555",  
@@ -41,8 +35,6 @@ class LoginRequest(BaseModel):
 async def login(req: LoginRequest):
     logger.info("Login attempt with account: %s, password: %s", req.account, req.password)
     result = loginmanager.login(req.account, req.password)
-    if not result["success"]:
-        raise HTTPException(status_code=401, detail="Login failed")
     return result
 
 @app.get("/api/login")
@@ -50,6 +42,10 @@ async def loggedIn():
     if loginmanager._is_loggedIn():
         return {"loggedIn": True}
     return {"loggedIn": False}
+
+@app.get("/api/user")
+async def userInfo():
+    return loginmanager.get_user_info()
 
 @app.post("/api/logout")
 async def logout():
@@ -63,25 +59,8 @@ def get_static_dir():
 
 app.mount("/", StaticFiles(directory=get_static_dir(), html=True), name="static")
 
-log_queue = queue.Queue()
-
-class LogHandler(logging.Handler):
-    def emit(self, record):
-        log_queue.put(self.format(record))
-
 def run_backend(app):
-    logger = logging.getLogger("uvicorn")
-    logger.setLevel(logging.INFO)
-    handler = LogHandler()
-    handler.setFormatter(logging.Formatter('%(message)s'))
-    handler.setFormatter(formatter) 
-    logger.addHandler(handler)
-    
-    file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
     uvicorn.run(app, host="127.0.0.1", port=8765, log_config=None)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8765, log_config=None)
+    run_backend(app)

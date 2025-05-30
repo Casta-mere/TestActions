@@ -1,12 +1,13 @@
 # Author: Casta-mere
-from .constants import HEADERS, LOGIN_URL, DB_PATH, CREATE_DB
+from .constants import HEADERS, LOGIN_URL, DB_PATH, CREATE_DB, USER_INFO_URL
 import sqlite3
 import requests
 import logging
 import json
 import time
+from requests.exceptions import ProxyError, RequestException
 
-logger = logging.getLogger("uvicorn") 
+logger = logging.getLogger("uvicorn")
 
 class LoginManager:
 
@@ -15,6 +16,7 @@ class LoginManager:
         self.account = None
         self.cookies = None
         self.loggedIn = False
+        self.userInfo = {}
         self._load_if_exists()
 
     def _get_conn(self):
@@ -34,22 +36,35 @@ class LoginManager:
                 self.cookies = json.loads(cookies_str)
                 if self._is_cookie_valid(self.cookies):
                     self.loggedIn = True
+                    self._get_user_info()
                 else:
                     self.account = None
                     self.cookies = None
 
     def login(self, account: str, password: str):
         data = f"account={account}&password={password}&phoneAccountBindToken=undefined&thirdAccountBindToken=undefined"
-        response = requests.post(LOGIN_URL, headers=HEADERS, data=data)
-        logger.info(response.json())
-        if response.status_code == 200:
-            self.loggedIn = True
-            self.account = account
-            self.cookies = response.cookies.get_dict()
-            self._save_cookies()
-            self.get_user_info()
-            return {"success": True, "cookies": self.cookies}
-        return {"success": False, "status": response.status_code}
+        try:
+            response = requests.post(LOGIN_URL, headers=HEADERS, data=data)
+            logger.info(response.json())
+            logger.info(response)
+            if response.status_code == 200:
+                self.loggedIn = True
+                self.account = account
+                self.cookies = response.cookies.get_dict()
+                self._save_cookies()
+                self._get_user_info()
+                return {"success": True, "cookies": self.cookies}
+            elif response.json().get("description"):
+                return {"success": False, "errormsg": response.json()["description"]}
+            return {"success": False, "errormsg": "出现未知问题"}
+
+        except ProxyError as e:
+            logger.error("Proxy error occurred during login: %s", e)
+            return {"success": False, "errormsg": "代理出问题了，关了你的梯子再试试"}
+
+        except RequestException as e:
+            logger.error("Request failed during login: %s", e)
+            return {"success": False, "errormsg": "网络请求失败，请稍后重试"}
 
     def get_cookie(self, account: str):
         self.account = account
@@ -87,44 +102,22 @@ class LoginManager:
         self.loggedIn = False
         self.account = None
         self.cookies = None
+        self.userInfo = {}
+
+    def _get_user_info(self):
+        try:
+            response = requests.get(USER_INFO_URL, headers=HEADERS, cookies=self.cookies)
+            res = response.json()
+            logger.info(res)
+            self.userInfo["nickname"] = res.get("nickname", "")
+            self.userInfo["faceUrl"] =  "https://imagecdn3.allcpp.cn/face" + res.get("face", {}).get("picUrl", "")
+            logger.info("Fetched user info: %s", self.userInfo)
+        except requests.RequestException as e:
+            logger.error("Failed to fetch user info: %s", e)
+        except ValueError as e:
+            logger.error("Failed to parse JSON response: %s", e)
 
     def get_user_info(self):
-        url = "https://user.allcpp.cn/rest/my"
-        response = requests.get(url, headers=HEADERS, cookies=self.cookies)
-        logger.info(response.json())
-
-
-    # https://www.allcpp.cn/allcpp/loginregister/getUser/3705778.do
-#     {
-#     "result": {
-#         "violationDescription": "",
-#         "showType": 0,
-#         "isFriend": 0,
-#         "showFans": 1,
-#         "circleList": [],
-#         "showFollow": 1,
-#         "userMain": {
-#             "uid": 3705778,
-#             "nickname": "castamerego",
-#             "facePicId": 8897021,
-#             "faceUrl": "https://imagecdn3.allcpp.cn/face/2025/5/a99f0bf2-4ee9-45c5-a68b-4d218c26f795",
-#             "description": "",
-#             "likedCount": 0,
-#             "followCount": 1,
-#             "circleId": 2807100,
-#             "circleName": "castamerego的社团",
-#             "isliked": 0,
-#             "isHide": false,
-#             "homePage": "",
-#             "weibo": "",
-#             "pixiv": "",
-#             "lofter": "",
-#             "telValidType": 1,
-#             "pageType": 0,
-#             "enabled": 2,
-#             "userDegreeList": []
-#         }
-#     },
-#     "message": "",
-#     "isSuccess": true
-# }
+        if self.loggedIn:
+            return self.userInfo
+        else: return None

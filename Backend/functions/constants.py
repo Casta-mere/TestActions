@@ -16,6 +16,7 @@ HEADERS = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0'
 }
 LOGIN_URL = "https://user.allcpp.cn/api/login/normal"
+USER_INFO_URL = "https://user.allcpp.cn/rest/my"
 CREATE_DB = """CREATE TABLE IF NOT EXISTS cookies (
                     account TEXT PRIMARY KEY,
                     cookies_dict TEXT NOT NULL,
@@ -23,3 +24,4 @@ CREATE_DB = """CREATE TABLE IF NOT EXISTS cookies (
                 )
             """
 DB_PATH = ".cookies.db"
+BACKEND_PORT = "4869"
