@@ -8,6 +8,7 @@ a = Analysis(['run.py'],
              binaries=[],
              datas=[
                  ('Backend/*.py', 'Backend'),
+                 ('Backend/functions/*.py', 'Backend/functions'),
                  ('Frontend/static', 'Frontend/static'),
              ],
              hiddenimports=[],
