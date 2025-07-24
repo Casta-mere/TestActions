@@ -9,6 +9,8 @@ on:
 jobs:
   build-frontend:
     runs-on: ubuntu-latest
+    env:
+      VERSION_TAG: ${{ github.event_name == 'workflow_dispatch' && 'V0.0.0' || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -16,7 +18,7 @@ jobs:
         run: docker volume create cpp_node_modules
 
       - name: Build frontend image
-        run: docker build -t cpp-ticket-frontend:${{ github.ref_name }} -f Frontend/Dockerfile Frontend
+        run: docker build -t cpp-ticket-frontend:${{ env.VERSION_TAG }} -f Frontend/Dockerfile Frontend
 
       - name: Run frontend container to build static files
         run: |
@@ -24,7 +26,7 @@ jobs:
             -v cpp_node_modules:/cpp-ticket/node_modules \
             -v ${{ github.workspace }}/Frontend/cpp-ticket:/cpp-ticket \
             -v ${{ github.workspace }}/Frontend/static:/cpp-ticket/out_exported \
-            cpp-ticket-frontend:${{ github.ref_name }}
+            cpp-ticket-frontend:${{ env.VERSION_TAG }}
 
       - name: Upload static files
         uses: actions/upload-artifact@v4
@@ -35,6 +37,8 @@ jobs:
   build-windows:
     runs-on: windows-latest
     needs: build-frontend
+    env:
+      VERSION_TAG: ${{ github.event_name == 'workflow_dispatch' && 'V0.0.0' || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,17 +66,64 @@ jobs:
         run: pyinstaller run.spec
 
       - name: Compress CPP-Ticket.exe into zip
-        run: powershell Compress-Archive -Path dist/CPP-Ticket.exe -DestinationPath CPP-Ticket_windows_${{ github.ref_name }}.zip
+        run: powershell Compress-Archive -Path dist/CPP-Ticket.exe -DestinationPath CPP-Ticket_windows_${{ env.VERSION_TAG }}.zip
 
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
           name: cpp-ticket-zip
-          path: CPP-Ticket_windows_${{ github.ref_name }}.zip
+          path: CPP-Ticket_windows_${{ env.VERSION_TAG }}.zip
+
+  build-macos:
+    runs-on: macos-latest
+    needs: build-frontend
+    env:
+      VERSION_TAG: ${{ github.event_name == 'workflow_dispatch' && 'V0.0.0' || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download static files
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-static
+          path: Frontend/static
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Configure pip to use Tsinghua mirror
+        run: |
+          mkdir -p ~/.pip
+          echo "[global]" > ~/.pip/pip.conf
+          echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> ~/.pip/pip.conf
+          echo "trusted-host = pypi.tuna.tsinghua.edu.cn" >> ~/.pip/pip.conf
+
+      - name: Install Python dependencies and PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ./Backend/requirements.txt
+          pip install --upgrade pip setuptools
+          pip install --upgrade pyinstaller
+
+      - name: Use PyInstaller to build macOS binary
+        run: pyinstaller run.spec
+
+      - name: Compress CPP-Ticket into zip
+        run: zip -r CPP-Ticket_macos_${{ env.VERSION_TAG }}.zip dist/CPP-Ticket
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-ticket-macos-zip
+          path: CPP-Ticket_macos_${{ env.VERSION_TAG }}.zip
 
   release:
-    needs: [build-windows]
+    needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
+    env:
+      VERSION_TAG: ${{ github.event_name == 'workflow_dispatch' && 'V0.0.0' || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -82,12 +133,19 @@ jobs:
           name: cpp-ticket-zip
           path: artifacts/
 
+      - name: Download macOS zip
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-ticket-macos-zip
+          path: artifacts/
+
       - name: Create GitHub Release with zip files
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           files: |
-            artifacts/CPP-Ticket_windows_${{ github.ref_name }}.zip
+            artifacts/CPP-Ticket_windows_${{ env.VERSION_TAG }}.zip
+            artifacts/CPP-Ticket_macos_${{ env.VERSION_TAG }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GH_CPP_Ticket }}
